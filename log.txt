@@ -1,0 +1,3 @@
+{"level":"ERROR","service":"payments","message":"Database connection failed"}
+{"level":"ERROR","service":"payments","message":"Database connection failed"}
+{"level":"ERROR","service":"payments","message":"Database connection failed"}

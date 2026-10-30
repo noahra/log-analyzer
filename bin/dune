@@ -1,0 +1,4 @@
+(executable
+ (public_name log-analyzer)
+ (name main)
+ (libraries log_analyzer yojson))

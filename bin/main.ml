@@ -1,50 +1,58 @@
-open Yojson.Safe.Util
-
 type log_type = Info | Error | Warning
 
+module ErrorKey = struct
+  type t = string * string
+  let compare = Stdlib.compare
+end
 
-let convert_lvl logs = to_string (member "level" logs)
-
-let find_error lvl = match (convert_lvl lvl) with
-| "ERROR" -> 1
-| _ ->  0
+module ErrorMap = Map.Make(ErrorKey)
 
 
 
-let rec count_errors acc lst = match lst with 
-| [] -> acc
-| h::t -> count_errors (acc+(find_error h)) t
+let counts : int ErrorMap.t = ErrorMap.empty
+
+let count_error counts service message =
+  let key = (service, message) in
+  let next_count =
+    match ErrorMap.find_opt key counts with
+    | None -> 1
+    | Some n -> n + 1
+  in
+  ErrorMap.add key next_count counts
 
 
 let file = "log.txt"
 
 
+let update_counts counts line =
+  let open Yojson.Safe.Util in
+  let json = Yojson.Safe.from_string line in
+  match json |> member "level" |> to_string with
+  | "ERROR" ->
+      let service = json |> member "service" |> to_string in
+      let message = json |> member "message" |> to_string in
+      count_error counts service message
+  | _ -> counts
 
-let rec read_all_lines acc cursor = match input_line cursor with
-| exception End_of_file -> List.rev acc
-| line -> read_all_lines (line::acc)  cursor
+let rec read_all_lines counts cursor = 
+  match input_line cursor with
+| exception End_of_file -> counts
+| line -> read_all_lines (update_counts counts line)  cursor
 
 let () =
-  (* Read file and display the first line *)
-  let ic = open_in file in
-  try
-
-    let lst_of_logs = read_all_lines [] ic in
-    let parsed_logs = List.map Yojson.Safe.from_string lst_of_logs in
-
-    let error_count = count_errors 0 parsed_logs in
-    print_endline (string_of_int (error_count));
-
-    (* write the result to stdout *)
-    flush stdout;
-    (* write on the underlying device now *)
-    close_in ic
-    (* close the input channel *)
-  with e ->
-    (* some unexpected exception occurs *)
-    close_in_noerr ic;
-    (* emergency closing *)
-    raise e
+  let counts = In_channel.with_open_text file (fun ic ->
+    read_all_lines ErrorMap.empty ic)
+  in
+  let rows =
+    ErrorMap.bindings counts
+    |> List.sort (fun (_, a) (_, b) -> Int.compare b a)
+  in
+  let total = List.fold_left (fun sum (_, n) -> sum + n) 0 rows in
+  Printf.printf "%d errors\n" total;
+  List.iter
+    (fun ((service, message), n) ->
+      Printf.printf "%4d  %s: %s\n" n service message)
+    rows
 
 
 

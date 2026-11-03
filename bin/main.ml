@@ -1,5 +1,3 @@
-type log_type = Info | Error | Warning
-
 module ErrorKey = struct
   type t = string * string
   let compare = Stdlib.compare
